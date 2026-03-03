@@ -3,6 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "@/db";
 
 export const auth = betterAuth({
+  baseURL: process.env.NEXT_PUBLIC_BASE_URL!,
   database: drizzleAdapter(db, {
     provider: "pg",
   }),
@@ -10,6 +11,9 @@ export const auth = betterAuth({
     process.env.NEXT_PUBLIC_BASE_URL!,
     process.env.NEXT_PUBLIC_FRONTEND_URL!,
   ],
+  emailAndPassword: {
+    enabled: true,
+  },
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID!,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET!,

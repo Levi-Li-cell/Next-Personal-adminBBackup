@@ -1,18 +1,66 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "@/lib/auth/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 
-export default function LoginPage() {
+// 包装组件以避免Suspense错误
+function LoginContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [ssoLoading, setSsoLoading] = useState(false);
+
+  // 检查URL中是否有sso token参数
+  useEffect(() => {
+    const ssoToken = searchParams.get('sso');
+    const error = searchParams.get('error');
+
+    if (error) {
+      const errorMessages: Record<string, string> = {
+        missing_token: "缺少登录凭证",
+        invalid_token: "登录凭证无效或已过期",
+        user_not_found: "用户不存在",
+        not_admin: "您不是管理员，无法访问后台",
+        session_failed: "创建会话失败",
+        sso_failed: "单点登录失败",
+      };
+      toast.error(errorMessages[error] || "登录失败");
+    }
+
+    if (ssoToken) {
+      handleSsoLogin(ssoToken);
+    }
+  }, [searchParams]);
+
+  const handleSsoLogin = async (token: string) => {
+    setSsoLoading(true);
+    try {
+      const response = await fetch(`/api/auth/sso?token=${token}`);
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success("登录成功");
+        router.push(data.redirect || "/dashboard");
+      } else {
+        toast.error(data.error || "单点登录失败");
+        router.push("/login");
+      }
+    } catch (error) {
+      console.error("SSO登录失败:", error);
+      toast.error("单点登录失败");
+      router.push("/login");
+    } finally {
+      setSsoLoading(false);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,6 +84,18 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  // SSO 登录中显示加载状态
+  if (ssoLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-purple-400 mx-auto mb-4" />
+          <p className="text-white/60">正在验证登录信息...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
@@ -82,7 +142,28 @@ export default function LoginPage() {
             {loading ? "登录中..." : "登录"}
           </Button>
         </form>
+
+        <div className="mt-6 text-center">
+          <a
+            href="http://localhost:3000"
+            className="text-sm text-purple-400 hover:text-purple-300"
+          >
+            返回前台网站
+          </a>
+        </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
+        <Loader2 className="w-12 h-12 animate-spin text-purple-400" />
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   );
 }

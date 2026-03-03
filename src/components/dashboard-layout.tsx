@@ -13,6 +13,8 @@ import {
   LogOut,
   Menu,
   X,
+  Settings,
+  Bell,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -22,8 +24,37 @@ const navItems = [
   { href: "/dashboard/blog", label: "博客管理", icon: FileText },
   { href: "/dashboard/projects", label: "项目管理", icon: FolderKanban },
   { href: "/dashboard/users", label: "用户管理", icon: Users },
-  { href: "/dashboard/photos", label: "照片管理", icon: Image },
+  { href: "/dashboard/notifications", label: "通知中心", icon: Bell },
 ];
+
+// 侧边栏菜单项组件
+function NavItem({ href, label, icon, isActive, onClick }: {
+  href: string;
+  label: string;
+  icon: React.ElementType;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  const Icon = icon;
+  return (
+    <Link
+      key={href}
+      href={href}
+      onClick={onClick}
+      className="group flex items-center gap-3 px-4 py-3 rounded-lg transition-colors"
+    >
+      <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${isActive ? 'bg-purple-500/20 text-purple-400' : 'text-white/60 group-hover:bg-white/5 group-hover:text-white'}`}>
+        <Icon className="w-5 h-5" />
+      </div>
+      <span className={`font-medium transition-colors ${isActive ? 'text-purple-400' : 'text-white/60 group-hover:text-white'}`}>
+        {label}
+      </span>
+      {isActive && (
+        <div className="ml-auto w-1.5 h-8 bg-purple-400 rounded-l-full" />
+      )}
+    </Link>
+  );
+}
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -53,45 +84,45 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-2">
+          <nav className="flex-1 p-4 space-y-1">
             {navItems.map((item) => {
-              const Icon = item.icon;
               const isActive = pathname === item.href;
               return (
-                <Link
+                <NavItem
                   key={item.href}
                   href={item.href}
+                  label={item.label}
+                  icon={item.icon}
+                  isActive={isActive}
                   onClick={() => setSidebarOpen(false)}
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
-                    isActive
-                      ? "bg-purple-500/20 text-purple-400"
-                      : "text-white/60 hover:bg-white/5 hover:text-white"
-                  )}
-                >
-                  <Icon className="w-5 h-5" />
-                  {item.label}
-                </Link>
+                />
               );
             })}
           </nav>
 
           {/* User Info */}
           <div className="p-4 border-t border-white/10">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold">
-                {session?.user?.name?.[0]?.toUpperCase() || "U"}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-white truncate">{session?.user?.name}</div>
-                <div className="text-white/40 text-sm truncate">
-                  {session?.user?.email}
+            <div className="bg-white/5 rounded-lg p-4 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold text-lg">
+                  {session?.user?.name?.[0]?.toUpperCase() || "U"}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-white font-medium truncate">{session?.user?.name}</div>
+                  <div className="text-white/40 text-sm truncate">
+                    {session?.user?.email}
+                  </div>
+                  <div className="mt-1">
+                    <span className="px-2 py-0.5 text-xs rounded-full bg-purple-500/20 text-purple-400">
+                      管理员
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
             <Button
               variant="ghost"
-              className="w-full text-white/60 hover:text-white hover:bg-white/5"
+              className="w-full text-white/60 hover:text-white hover:bg-white/5 rounded-lg transition-all"
               onClick={handleSignOut}
             >
               <LogOut className="w-4 h-4 mr-2" />
@@ -112,15 +143,26 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-screen">
         {/* Header */}
-        <header className="sticky top-0 z-30 bg-gray-900/80 backdrop-blur-lg border-b border-white/10 px-6 py-4 lg:hidden">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-white"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-          >
-            {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </Button>
+        <header className="sticky top-0 z-30 bg-gray-900/80 backdrop-blur-lg border-b border-white/10 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-white lg:hidden"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+            >
+              {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </Button>
+            <div className="flex items-center gap-4">
+              <Button
+                variant="ghost"
+                className="text-white/60 hover:text-white hover:bg-white/5 rounded-lg transition-all"
+                onClick={() => window.location.href = "/"}
+              >
+                返回前台
+              </Button>
+            </div>
+          </div>
         </header>
 
         {/* Content */}
