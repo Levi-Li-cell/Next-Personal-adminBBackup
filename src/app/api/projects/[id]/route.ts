@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { project } from "@/db/schema/project";
 import { eq } from "drizzle-orm";
+import { deleteBlobUrls } from "@/lib/storage/blob";
+import { extractImageUrlsFromHtml, htmlToMarkdown } from "@/lib/content/markdown";
 
 export async function GET(
   request: NextRequest,
@@ -44,14 +46,37 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
 
+    const existing = await db
+      .select()
+      .from(project)
+      .where(eq(project.id, id))
+      .limit(1);
+
+    if (!existing[0]) {
+      return NextResponse.json(
+        { success: false, error: "项目不存在" },
+        { status: 404 }
+      );
+    }
+
+    const contentHtml = String(body.content || "");
+    const contentMarkdown = htmlToMarkdown(contentHtml);
+    const editorImageLinks = extractImageUrlsFromHtml(contentHtml);
+    const nextImageLinks = [...new Set([...editorImageLinks, body.coverImage].filter(Boolean))];
+
+    const previousImageLinks = Array.isArray(existing[0].imageLinks) ? existing[0].imageLinks : [];
+    const removedLinks = previousImageLinks.filter((url) => !nextImageLinks.includes(url));
+
+    await deleteBlobUrls(removedLinks);
+
     const updatedProject = await db
       .update(project)
       .set({
         title: body.title,
         description: body.description,
-        content: body.content,
+        content: contentMarkdown,
         coverImage: body.coverImage,
-        imageLinks: body.imageLinks || [],
+        imageLinks: nextImageLinks,
         techStack: body.techStack || [],
         demoUrl: body.demoUrl,
         githubUrl: body.githubUrl,
@@ -60,13 +85,6 @@ export async function PUT(
       })
       .where(eq(project.id, id))
       .returning();
-
-    if (!updatedProject[0]) {
-      return NextResponse.json(
-        { success: false, error: "项目不存在" },
-        { status: 404 }
-      );
-    }
 
     return NextResponse.json({
       success: true,
@@ -88,17 +106,26 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    const deletedProject = await db
-      .delete(project)
+    const existing = await db
+      .select()
+      .from(project)
       .where(eq(project.id, id))
-      .returning();
+      .limit(1);
 
-    if (!deletedProject[0]) {
+    if (!existing[0]) {
       return NextResponse.json(
         { success: false, error: "项目不存在" },
         { status: 404 }
       );
     }
+
+    const imageLinks = Array.isArray(existing[0].imageLinks) ? existing[0].imageLinks : [];
+    await deleteBlobUrls(imageLinks);
+
+    const deletedProject = await db
+      .delete(project)
+      .where(eq(project.id, id))
+      .returning();
 
     return NextResponse.json({
       success: true,

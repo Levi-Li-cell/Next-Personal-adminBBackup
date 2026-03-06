@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { user } from "@/db/schema/auth/user";
-import { desc, like, or } from "drizzle-orm";
+import { and, count, desc, like, or, type SQL } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,26 +11,27 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "10");
     const offset = (page - 1) * limit;
 
-    let query = db.select().from(user);
+    const filters: SQL[] = [];
 
-    // 搜索条件
     if (search) {
-      query = query.where(
-        or(
-          like(user.name, `%${search}%`),
-          like(user.email, `%${search}%`)
-        )
-      ) as any;
+      filters.push(or(like(user.name, `%${search}%`), like(user.email, `%${search}%`))!);
     }
 
-    const users = await query
+    const whereCondition = filters.length > 0 ? and(...filters) : undefined;
+
+    const users = await db
+      .select()
+      .from(user)
+      .where(whereCondition)
       .orderBy(desc(user.createdAt))
       .limit(limit)
       .offset(offset);
 
-    // 获取总数
-    const totalResult = await db.select().from(user);
-    const total = totalResult.length;
+    const [totalResult] = await db
+      .select({ value: count() })
+      .from(user)
+      .where(whereCondition);
+    const total = totalResult?.value ?? 0;
 
     return NextResponse.json({
       success: true,

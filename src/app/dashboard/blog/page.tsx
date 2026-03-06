@@ -57,6 +57,7 @@ export default function BlogManagementPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   // 获取博客列表
   useEffect(() => {
@@ -98,7 +99,7 @@ export default function BlogManagementPage() {
     }
 
     fetchBlogPosts();
-  }, [page, limit, search, category, status]);
+  }, [page, limit, search, category, status, reloadKey]);
 
   // 删除博客
   const handleDelete = async () => {
@@ -225,7 +226,7 @@ export default function BlogManagementPage() {
                       <Button 
                         variant="ghost" 
                         className="mt-4 text-purple-400 hover:text-purple-300"
-                        onClick={() => window.location.reload()}
+                        onClick={() => setReloadKey((value) => value + 1)}
                       >
                         重试
                       </Button>

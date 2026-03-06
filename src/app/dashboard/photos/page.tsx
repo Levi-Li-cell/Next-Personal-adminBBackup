@@ -8,8 +8,9 @@ import {
   Trash2,
   Plus,
   Folder,
-  Image as ImageIcon,
   Search,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,65 +36,98 @@ interface Category {
   count: number;
 }
 
+interface PhotoRecord {
+  id: string;
+  title: string | null;
+  url: string;
+  album: string | null;
+  createdAt: string;
+}
+
 export default function PhotosPage() {
   const router = useRouter();
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [isCreateCategoryDialogOpen, setIsCreateCategoryDialogOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [uploadCategory, setUploadCategory] = useState("默认相册");
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+  const [reloadKey, setReloadKey] = useState(0);
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
 
-  // 模拟数据
-  useEffect(() => {
-    setTimeout(() => {
-      const mockCategories: Category[] = [
-        { id: "1", name: "个人照片", count: 5 },
-        { id: "2", name: "项目截图", count: 3 },
-        { id: "3", name: "其他", count: 2 },
-      ];
+  const refreshPhotos = async () => {
+    try {
+      setLoading(true);
 
-      const mockPhotos: Photo[] = [
-        {
-          id: "1",
-          filename: "photo1.jpg",
-          url: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=100&q=80",
-          size: 1024000,
-          category: "个人照片",
-          uploadedAt: "2026-03-01T00:00:00Z",
-        },
-        {
-          id: "2",
-          filename: "photo2.jpg",
-          url: "https://images.unsplash.com/photo-1517849845537-4d257902454a?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=100&q=80",
-          size: 2048000,
-          category: "项目截图",
-          uploadedAt: "2026-03-02T00:00:00Z",
-        },
-        {
-          id: "3",
-          filename: "photo3.jpg",
-          url: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=100&q=80",
-          size: 1536000,
-          category: "个人照片",
-          uploadedAt: "2026-03-03T00:00:00Z",
-        },
-      ];
+      const params = new URLSearchParams();
+      if (search) {
+        params.set("search", search);
+      }
+      if (selectedCategory !== "all") {
+        params.set("category", selectedCategory);
+      }
 
-      setCategories(mockCategories);
-      setPhotos(mockPhotos);
+      const response = await fetch(`/api/photos?${params.toString()}`);
+      const result: { success: boolean; data: PhotoRecord[]; error?: string } = await response.json();
+
+      if (!result.success) {
+        toast.error(result.error || "获取照片失败");
+        return;
+      }
+
+      const mapped = result.data.map((item) => ({
+        id: item.id,
+        filename: item.title || "未命名图片",
+        url: item.url,
+        size: 0,
+        category: item.album || "默认相册",
+        uploadedAt: item.createdAt,
+      }));
+
+      const categoryMap = new Map<string, number>();
+      mapped.forEach((item) => {
+        categoryMap.set(item.category, (categoryMap.get(item.category) || 0) + 1);
+      });
+
+      const generatedCategories: Category[] = Array.from(categoryMap.entries()).map(([name, count], index) => ({
+        id: String(index + 1),
+        name,
+        count,
+      }));
+
+      if (generatedCategories.length === 0) {
+        generatedCategories.push({ id: "1", name: "默认相册", count: 0 });
+      }
+
+      setPhotos(mapped);
+      setSelectedPhotoIds((prev) => prev.filter((id) => mapped.some((item) => item.id === id)));
+      setCategories(generatedCategories);
+
+      if (!generatedCategories.find((item) => item.name === uploadCategory)) {
+        setUploadCategory(generatedCategories[0].name);
+      }
+    } catch (error) {
+      console.error("获取照片失败:", error);
+      toast.error("获取照片失败");
+    } finally {
       setLoading(false);
-    }, 500);
-  }, []);
+    }
+  };
+
+  useEffect(() => {
+    refreshPhotos();
+  }, [search, selectedCategory, reloadKey]);
 
   // 过滤照片
   const filteredPhotos = photos.filter((photo) => {
     const matchesSearch = photo.filename.toLowerCase().includes(search.toLowerCase());
-    const matchesCategory = selectedCategory ? photo.category === selectedCategory : true;
+    const matchesCategory = selectedCategory !== "all" ? photo.category === selectedCategory : true;
     return matchesSearch && matchesCategory;
   });
 
@@ -118,23 +152,51 @@ export default function PhotosPage() {
     if (uploadedFiles.length === 0) return;
 
     setUploading(true);
+    setUploadProgress({ current: 0, total: uploadedFiles.length });
 
     try {
-      // 这里需要实现照片上传API
-      // 暂时模拟上传成功
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      for (let i = 0; i < uploadedFiles.length; i++) {
+        const file = uploadedFiles[i];
+        setUploadProgress({ current: i + 1, total: uploadedFiles.length });
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const uploadResp = await fetch(`/api/upload?filename=${encodeURIComponent(file.name)}`, {
+          method: "POST",
+          body: formData,
+        });
+        const uploadResult: { success: boolean; url?: string; error?: string } = await uploadResp.json();
+
+        if (!uploadResult.success || !uploadResult.url) {
+          throw new Error(uploadResult.error || "上传失败");
+        }
+
+        const createResp = await fetch("/api/photos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            filename: file.name,
+            url: uploadResult.url,
+            category: uploadCategory,
+          }),
+        });
+        const createResult = await createResp.json();
+
+        if (!createResult.success) {
+          throw new Error(createResult.error || "保存照片记录失败");
+        }
+      }
 
       toast.success(`成功上传 ${uploadedFiles.length} 张照片`);
       setUploadedFiles([]);
       setIsUploadDialogOpen(false);
-
-      // 刷新照片列表
-      // 这里应该调用API获取最新照片列表
+      setReloadKey((value) => value + 1);
     } catch (error) {
       toast.error("上传失败，请重试");
       console.error("上传照片失败:", error);
     } finally {
       setUploading(false);
+      setUploadProgress({ current: 0, total: 0 });
     }
   };
 
@@ -143,15 +205,16 @@ export default function PhotosPage() {
     if (!newCategoryName.trim()) return;
 
     try {
-      // 这里需要实现创建分类API
-      // 暂时模拟创建成功
       const newCategory: Category = {
-        id: (categories.length + 1).toString(),
+        id: `category-${Date.now()}`,
         name: newCategoryName.trim(),
         count: 0,
       };
 
-      setCategories([...categories, newCategory]);
+      if (!categories.find((item) => item.name === newCategory.name)) {
+        setCategories([...categories, newCategory]);
+      }
+      setUploadCategory(newCategory.name);
       setNewCategoryName("");
       setIsCreateCategoryDialogOpen(false);
       toast.success("分类创建成功");
@@ -164,13 +227,61 @@ export default function PhotosPage() {
   // 删除照片
   const handleDeletePhoto = async (id: string) => {
     try {
-      // 这里需要实现删除照片API
-      // 暂时模拟删除成功
+      const response = await fetch(`/api/photos/${id}`, {
+        method: "DELETE",
+      });
+      const result = await response.json();
+
+      if (!result.success) {
+        toast.error(result.error || "删除失败");
+        return;
+      }
+
       setPhotos((prev) => prev.filter((photo) => photo.id !== id));
+      setSelectedPhotoIds((prev) => prev.filter((photoId) => photoId !== id));
       toast.success("照片删除成功");
+      setReloadKey((value) => value + 1);
     } catch (error) {
       toast.error("删除照片失败，请重试");
       console.error("删除照片失败:", error);
+    }
+  };
+
+  const toggleSelectPhoto = (id: string) => {
+    setSelectedPhotoIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedPhotoIds.length === filteredPhotos.length) {
+      setSelectedPhotoIds([]);
+      return;
+    }
+
+    setSelectedPhotoIds(filteredPhotos.map((item) => item.id));
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedPhotoIds.length === 0) {
+      return;
+    }
+
+    try {
+      await Promise.all(
+        selectedPhotoIds.map((id) =>
+          fetch(`/api/photos/${id}`, {
+            method: "DELETE",
+          })
+        )
+      );
+
+      toast.success(`成功删除 ${selectedPhotoIds.length} 张照片`);
+      setSelectedPhotoIds([]);
+      setReloadKey((value) => value + 1);
+    } catch (error) {
+      console.error("批量删除失败:", error);
+      toast.error("批量删除失败，请重试");
     }
   };
 
@@ -206,7 +317,7 @@ export default function PhotosPage() {
                 <SelectValue placeholder="选择分类" />
               </SelectTrigger>
               <SelectContent className="bg-gray-800 border-white/10">
-                <SelectItem value="">全部分类</SelectItem>
+                <SelectItem value="all">全部分类</SelectItem>
                 {categories.map((category) => (
                   <SelectItem key={category.id} value={category.name}>
                     {category.name} ({category.count})
@@ -215,6 +326,29 @@ export default function PhotosPage() {
               </SelectContent>
             </Select>
             <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={toggleSelectAll}
+                className="text-white/60 hover:text-white hover:bg-white/10"
+              >
+                {selectedPhotoIds.length === filteredPhotos.length && filteredPhotos.length > 0 ? (
+                  <CheckSquare className="w-4 h-4 mr-2" />
+                ) : (
+                  <Square className="w-4 h-4 mr-2" />
+                )}
+                全选
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={handleBatchDelete}
+                disabled={selectedPhotoIds.length === 0}
+                className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                批量删除
+              </Button>
               <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
                 <DialogTrigger asChild>
                   <Button className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
@@ -240,7 +374,7 @@ export default function PhotosPage() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="category" className="text-white">选择分类</Label>
-                      <Select defaultValue={categories[0]?.name || ""}>
+                      <Select value={uploadCategory} onValueChange={setUploadCategory}>
                         <SelectTrigger className="bg-white/5 border-white/10">
                           <SelectValue placeholder="选择分类" />
                         </SelectTrigger>
@@ -268,6 +402,11 @@ export default function PhotosPage() {
                         </div>
                       </div>
                     )}
+                    {uploading && uploadProgress.total > 0 && (
+                      <div className="text-sm text-white/70">
+                        正在上传第 {uploadProgress.current} / {uploadProgress.total} 个文件...
+                      </div>
+                    )}
                     <div className="flex gap-2">
                       <Button
                         type="button"
@@ -291,7 +430,7 @@ export default function PhotosPage() {
               </Dialog>
               <Dialog open={isCreateCategoryDialogOpen} onOpenChange={setIsCreateCategoryDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button variant="ghost" className="text-white/60 hover:text-white hover:bg-white/10">
+                  <Button type="button" variant="ghost" className="text-white/60 hover:text-white hover:bg-white/10">
                     <Plus className="w-4 h-4 mr-2" />
                     新建分类
                   </Button>
@@ -372,6 +511,18 @@ export default function PhotosPage() {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
               {filteredPhotos.map((photo) => (
                 <div key={photo.id} className="group relative">
+                  <button
+                    type="button"
+                    onClick={() => toggleSelectPhoto(photo.id)}
+                    className="absolute z-10 top-2 left-2 h-7 w-7 rounded bg-black/50 flex items-center justify-center"
+                    aria-label="选择照片"
+                  >
+                    {selectedPhotoIds.includes(photo.id) ? (
+                      <CheckSquare className="w-4 h-4 text-white" />
+                    ) : (
+                      <Square className="w-4 h-4 text-white/80" />
+                    )}
+                  </button>
                   <div className="aspect-square overflow-hidden rounded-lg bg-white/5">
                     <img
                       src={photo.url}

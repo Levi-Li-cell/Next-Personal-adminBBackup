@@ -39,10 +39,18 @@ interface Settings {
   };
 }
 
+interface SettingsAuditItem {
+  id: string;
+  actorEmail: string | null;
+  actorName: string | null;
+  createdAt: string;
+}
+
 export default function SettingsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [audits, setAudits] = useState<SettingsAuditItem[]>([]);
   const [settings, setSettings] = useState<Settings>({
     site: {
       name: "个人网站",
@@ -64,34 +72,68 @@ export default function SettingsPage() {
     },
   });
 
-  // 模拟加载设置
   useEffect(() => {
-    setTimeout(() => {
-      // 这里应该从API获取设置
-      setLoading(false);
-    }, 500);
+    async function fetchSettings() {
+      try {
+        const response = await fetch("/api/settings");
+        const result = await response.json();
+
+        if (result.success) {
+          setSettings(result.data);
+          setAudits(result.audits || []);
+          return;
+        }
+
+        toast.error(result.error || "获取设置失败");
+      } catch (error) {
+        console.error("获取设置失败:", error);
+        toast.error("获取设置失败");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchSettings();
   }, []);
 
   // 处理输入变化
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    const [section, field] = name.split('.');
-    setSettings((prev) => ({
-      ...prev,
-      [section]: {
-        ...(prev[section as keyof Settings] as any),
-        [field]: value,
-      },
-    }));
+    const [section, field] = name.split(".") as [keyof Settings, string];
+
+    if (section === "site") {
+      setSettings((prev) => ({
+        ...prev,
+        site: {
+          ...prev.site,
+          [field]: value,
+        },
+      }));
+      return;
+    }
+
+    if (section === "seo") {
+      setSettings((prev) => ({
+        ...prev,
+        seo: {
+          ...prev.seo,
+          [field]: value,
+        },
+      }));
+    }
   };
 
   // 处理开关变化
   const handleSwitchChange = (name: string, checked: boolean) => {
     const [section, field] = name.split('.');
+    if (section !== "features") {
+      return;
+    }
+
     setSettings((prev) => ({
       ...prev,
-      [section]: {
-        ...(prev[section as keyof Settings] as any),
+      features: {
+        ...prev.features,
         [field]: checked,
       },
     }));
@@ -103,11 +145,26 @@ export default function SettingsPage() {
     setSaving(true);
 
     try {
-      // 这里需要实现保存设置的API
-      // 暂时模拟保存成功
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const response = await fetch("/api/settings", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(settings),
+      });
+      const result = await response.json();
+
+      if (!result.success) {
+        toast.error(result.error || "保存失败");
+        return;
+      }
 
       toast.success("设置保存成功");
+      const refreshed = await fetch("/api/settings");
+      const refreshedResult = await refreshed.json();
+      if (refreshedResult.success) {
+        setAudits(refreshedResult.audits || []);
+      }
     } catch (error) {
       toast.error("保存失败，请重试");
       console.error("保存设置失败:", error);
@@ -329,6 +386,34 @@ export default function SettingsPage() {
           </Button>
         </div>
       </form>
+
+      <Card className="bg-white/5 border-white/10">
+        <CardHeader>
+          <CardTitle className="text-white text-lg">最近配置变更</CardTitle>
+        </CardHeader>
+        <CardContent className="p-6 pt-0">
+          {audits.length === 0 ? (
+            <div className="text-white/60 text-sm">暂无变更记录</div>
+          ) : (
+            <div className="space-y-2">
+              {audits.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex flex-col md:flex-row md:items-center md:justify-between gap-1 p-3 rounded-lg bg-white/5"
+                >
+                  <div className="text-white/80 text-sm">
+                    {item.actorName || "未知用户"}
+                    {item.actorEmail ? ` (${item.actorEmail})` : ""}
+                  </div>
+                  <div className="text-white/50 text-xs">
+                    {new Date(item.createdAt).toLocaleString("zh-CN")}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* 提示信息 */}
       <Card className="bg-yellow-500/20 border-yellow-500/30">

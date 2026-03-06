@@ -21,7 +21,7 @@ interface UserFormData {
   name: string;
   email: string;
   role: string;
-  enabled: boolean;
+  emailVerified: boolean;
 }
 
 interface UserDetailResponse {
@@ -39,7 +39,7 @@ export default function EditUserPage() {
     name: "",
     email: "",
     role: "user",
-    enabled: true,
+    emailVerified: true,
   });
   const [error, setError] = useState<string | null>(null);
 
@@ -52,24 +52,18 @@ export default function EditUserPage() {
         setLoading(true);
         setError(null);
 
-        // 这里需要实现用户详情API路由
-        // 暂时使用模拟数据
-        // const response = await fetch(`/api/users/${id}`);
-        // const data: UserDetailResponse = await response.json();
+        const response = await fetch(`/api/users/${id}`);
+        const data: UserDetailResponse & { error?: string } = await response.json();
 
-        // 模拟数据
-        const mockData: UserDetailResponse = {
-          success: true,
-          data: {
-            id: id,
-            name: id === "1" ? "管理员" : "测试用户",
-            email: id === "1" ? "admin@example.com" : "test@example.com",
-            role: id === "1" ? "admin" : "user",
-            enabled: true,
-          },
-        };
+        if (data.success) {
+          setFormData({
+            ...data.data,
+            emailVerified: Boolean(data.data.emailVerified),
+          });
+          return;
+        }
 
-        setFormData(mockData.data);
+        setError(data.error || "获取用户详情失败");
       } catch (err) {
         setError("网络错误，请稍后重试");
         console.error("获取用户详情失败:", err);
@@ -105,18 +99,14 @@ export default function EditUserPage() {
     setSaving(true);
 
     try {
-      // 这里需要实现用户更新API路由
-      // const response = await fetch(`/api/users/${id}`, {
-      //   method: "PUT",
-      //   headers: {
-      //     "Content-Type": "application/json",
-      //   },
-      //   body: JSON.stringify(formData),
-      // });
-      // const data = await response.json();
-
-      // 模拟成功响应
-      const data: { success: boolean; error?: string } = { success: true };
+      const response = await fetch(`/api/users/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
+      const data: { success: boolean; error?: string } = await response.json();
 
       if (data.success) {
         toast.success("用户更新成功");
@@ -221,13 +211,13 @@ export default function EditUserPage() {
               <div>
                 <Label htmlFor="enabled" className="text-white">账户状态</Label>
                 <p className="text-white/60 text-sm mt-1">
-                  {formData.enabled ? "账户已启用" : "账户已禁用"}
+                  {formData.emailVerified ? "邮箱已验证" : "邮箱未验证"}
                 </p>
               </div>
               <Switch
                 id="enabled"
-                checked={formData.enabled}
-                onCheckedChange={(checked) => handleSwitchChange("enabled", checked)}
+                checked={formData.emailVerified}
+                onCheckedChange={(checked) => handleSwitchChange("emailVerified", checked)}
               />
             </div>
 

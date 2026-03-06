@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { signOut, useSession } from "@/lib/auth/client";
 import {
   LayoutDashboard,
@@ -15,6 +15,7 @@ import {
   X,
   Settings,
   Bell,
+  Home,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -58,12 +59,13 @@ function NavItem({ href, label, icon, isActive, onClick }: {
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { data: session } = useSession();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleSignOut = async () => {
     await signOut();
-    window.location.href = "/login";
+    router.push("/login");
   };
 
   return (
@@ -156,10 +158,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             <div className="flex items-center gap-4">
               <Button
                 variant="ghost"
-                className="text-white/60 hover:text-white hover:bg-white/5 rounded-lg transition-all"
-                onClick={() => window.location.href = "/"}
+                className="text-white/60 hover:text-white hover:bg-white/5 rounded-lg transition-all flex items-center gap-2"
+                onClick={() => {
+                  const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000';
+                  window.location.assign(frontendUrl);
+                }}
               >
-                返回前台
+                <Home className="w-4 h-4" />
+                <span className="hidden sm:inline">返回前台</span>
               </Button>
             </div>
           </div>

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "@/lib/auth/client";
 import {
   ArrowLeft,
   Save,
@@ -18,6 +19,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Editor } from "@tinymce/tinymce-react";
+import { uploadImageToBlob } from "@/lib/storage/upload-client";
+import { htmlToMarkdown } from "@/lib/content/markdown";
 
 interface BlogFormData {
   title: string;
@@ -34,6 +37,7 @@ interface BlogFormData {
 
 export default function CreateBlogPage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<BlogFormData>({
     title: "",
@@ -45,15 +49,24 @@ export default function CreateBlogPage() {
     status: "draft",
     coverImage: null,
     imageLinks: [],
-    authorId: "sZeM49ADgrey0t5HI5JyjphYJClcg4H", // 使用默认管理员ID
+    authorId: session?.user?.id || "", // 使用当前用户ID
   });
   const [tagInput, setTagInput] = useState("");
+  const [editorContent, setEditorContent] = useState(formData.content);
+  const [contentViewMode, setContentViewMode] = useState<"editor" | "markdown">("editor");
 
   // 处理表单输入变化
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
+
+  // 当session变化时更新authorId
+  useEffect(() => {
+    if (session?.user?.id) {
+      setFormData((prev) => ({ ...prev, authorId: session.user.id }));
+    }
+  }, [session]);
 
   // 处理选择变化
   const handleSelectChange = (name: string, value: string) => {
@@ -85,24 +98,13 @@ export default function CreateBlogPage() {
     if (!file) return;
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await fetch(`/api/upload?filename=${encodeURIComponent(file.name)}`, {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setFormData((prev) => ({ ...prev, coverImage: data.url }));
-        // 将图片链接添加到imageLinks数组
-        setFormData((prev) => ({ ...prev, imageLinks: [...prev.imageLinks, data.url] }));
-        toast.success("图片上传成功");
-      } else {
-        toast.error("图片上传失败: " + (data.error || "未知错误"));
-      }
+      const url = await uploadImageToBlob(file);
+      setFormData((prev) => ({
+        ...prev,
+        coverImage: url,
+        imageLinks: prev.imageLinks.includes(url) ? prev.imageLinks : [...prev.imageLinks, url],
+      }));
+      toast.success("图片上传成功");
     } catch (error) {
       toast.error("图片上传失败，请重试");
       console.error("图片上传失败:", error);
@@ -120,7 +122,7 @@ export default function CreateBlogPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, content: editorContent, imageLinks: formData.imageLinks }),
       });
 
       const data = await response.json();
@@ -241,7 +243,7 @@ export default function CreateBlogPage() {
                   onKeyPress={(e) => e.key === "Enter" && handleAddTag()}
                   className="flex-1 bg-white/5 border-white/10"
                 />
-                <Button onClick={handleAddTag} className="bg-purple-500 hover:bg-purple-600">
+                <Button type="button" onClick={handleAddTag} className="bg-purple-500 hover:bg-purple-600">
                   <Plus className="w-4 h-4 mr-2" />
                   添加
                 </Button>
@@ -254,6 +256,7 @@ export default function CreateBlogPage() {
                       variant="ghost"
                       size="icon"
                       className="h-6 w-6 text-white/40 hover:text-red-400 hover:bg-red-500/10"
+                      type="button"
                       onClick={() => handleRemoveTag(tag)}
                     >
                       <X className="w-3 h-3" />
@@ -287,7 +290,14 @@ export default function CreateBlogPage() {
                       variant="ghost"
                       size="icon"
                       className="absolute top-2 right-2 h-8 w-8 bg-black/50 text-white hover:bg-red-500/80"
-                      onClick={() => setFormData((prev) => ({ ...prev, coverImage: null }))}
+                      type="button"
+                      onClick={() =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          coverImage: null,
+                          imageLinks: prev.imageLinks.filter((item) => item !== prev.coverImage),
+                        }))
+                      }
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -298,32 +308,71 @@ export default function CreateBlogPage() {
 
             {/* 内容 */}
             <div className="space-y-2">
-              <Label htmlFor="content" className="text-white">内容</Label>
-              <div className="bg-white/5 border border-white/10 rounded-lg overflow-hidden">
-                <Editor
-                  license_key="gpl"
-                  id="content"
-                  name="content"
-                  initialValue={formData.content}
-                  onEditorChange={(content) => setFormData((prev) => ({ ...prev, content }))}
-                  init={{
-                    height: 500,
-                    menubar: false,
-                    plugins: [
-                      'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview', 'anchor',
-                      'searchreplace', 'visualblocks', 'code', 'fullscreen',
-                      'insertdatetime', 'media', 'table', 'paste', 'help', 'wordcount'
-                    ],
-                    toolbar: 'undo redo | formatselect | ' +
-                    'bold italic backcolor | alignleft aligncenter ' +
-                    'alignright alignjustify | bullist numlist outdent indent | ' +
-                    'removeformat | help',
-                    skin: 'oxide-dark',
-                    content_css: 'dark',
-                    promotion: false
-                  }}
-                />
+              <div className="flex items-center justify-between">
+                <Label htmlFor="content" className="text-white">内容</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={contentViewMode === "editor" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setContentViewMode("editor")}
+                  >
+                    可视化编辑
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={contentViewMode === "markdown" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setContentViewMode("markdown")}
+                  >
+                    Markdown 预览
+                  </Button>
+                </div>
               </div>
+              <p className="text-xs text-white/60">支持富文本可视化编辑，保存后自动转换为 Markdown。</p>
+              {contentViewMode === "editor" ? (
+                <div className="bg-white/5 border border-white/10 rounded-lg overflow-hidden">
+                  <Editor
+                    licenseKey="gpl"
+                    id="content"
+                    initialValue={editorContent}
+                    onEditorChange={(content) => setEditorContent(content)}
+                    init={{
+                      height: 500,
+                      menubar: false,
+                      plugins: [
+                        'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview', 'anchor',
+                        'searchreplace', 'visualblocks', 'code', 'fullscreen',
+                        'insertdatetime', 'media', 'table', 'paste', 'help', 'wordcount'
+                      ],
+                      toolbar: 'undo redo | formatselect | ' +
+                      'bold italic backcolor | alignleft aligncenter ' +
+                      'alignright alignjustify | bullist numlist outdent indent | ' +
+                      'removeformat | help',
+                      skin: 'oxide-dark',
+                      content_css: 'dark',
+                      promotion: false,
+                      images_upload_handler: async (blobInfo) => {
+                        const file = blobInfo.blob();
+                        const uploadFile = new File([file], blobInfo.filename(), { type: file.type });
+                        const url = await uploadImageToBlob(uploadFile);
+                        setFormData((prev) => ({
+                          ...prev,
+                          imageLinks: prev.imageLinks.includes(url) ? prev.imageLinks : [...prev.imageLinks, url],
+                        }));
+                        return url;
+                      },
+                    }}
+                  />
+                </div>
+              ) : (
+                <Textarea
+                  value={htmlToMarkdown(editorContent)}
+                  readOnly
+                  rows={16}
+                  className="bg-white/5 border-white/10 font-mono text-xs"
+                />
+              )}
             </div>
 
             {/* 提交按钮 */}
@@ -338,6 +387,7 @@ export default function CreateBlogPage() {
               </Button>
               <Button
                 variant="ghost"
+                type="button"
                 onClick={() => router.back()}
                 className="text-white/60 hover:text-white hover:bg-white/10"
               >

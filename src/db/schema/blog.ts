@@ -12,7 +12,7 @@ export const blog = pgTable("blog", {
   imageLinks: jsonb("image_links").$type<string[]>().default([]),
   category: text("category").notNull().default("未分类"),
   tags: jsonb("tags").$type<string[]>().default([]),
-  authorId: text("author_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  authorId: text("author_id").references(() => user.id, { onDelete: "cascade" }),
   status: text("status").notNull().default("draft"), // draft, published
   viewCount: integer("view_count").default(0),
   likeCount: integer("like_count").default(0),

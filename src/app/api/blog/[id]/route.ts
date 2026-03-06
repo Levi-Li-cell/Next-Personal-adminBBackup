@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { blog } from "@/db/schema/blog";
 import { eq } from "drizzle-orm";
+import { deleteBlobUrls } from "@/lib/storage/blob";
+import { extractImageUrlsFromHtml, htmlToMarkdown } from "@/lib/content/markdown";
 
 export async function GET(
   request: NextRequest,
@@ -44,15 +46,38 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
 
+    const existing = await db
+      .select()
+      .from(blog)
+      .where(eq(blog.id, id))
+      .limit(1);
+
+    if (!existing[0]) {
+      return NextResponse.json(
+        { success: false, error: "博客不存在" },
+        { status: 404 }
+      );
+    }
+
+    const contentHtml = String(body.content || "");
+    const contentMarkdown = htmlToMarkdown(contentHtml);
+    const editorImageLinks = extractImageUrlsFromHtml(contentHtml);
+    const nextImageLinks = [...new Set([...editorImageLinks, body.coverImage].filter(Boolean))];
+
+    const previousImageLinks = Array.isArray(existing[0].imageLinks) ? existing[0].imageLinks : [];
+    const removedLinks = previousImageLinks.filter((url) => !nextImageLinks.includes(url));
+
+    await deleteBlobUrls(removedLinks);
+
     const updatedBlog = await db
       .update(blog)
       .set({
         title: body.title,
         slug: body.slug,
         excerpt: body.excerpt,
-        content: body.content,
+        content: contentMarkdown,
         coverImage: body.coverImage,
-        imageLinks: body.imageLinks || [],
+        imageLinks: nextImageLinks,
         category: body.category,
         tags: body.tags || [],
         status: body.status,
@@ -60,13 +85,6 @@ export async function PUT(
       })
       .where(eq(blog.id, id))
       .returning();
-
-    if (!updatedBlog[0]) {
-      return NextResponse.json(
-        { success: false, error: "博客不存在" },
-        { status: 404 }
-      );
-    }
 
     return NextResponse.json({
       success: true,
@@ -88,17 +106,26 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    const deletedBlog = await db
-      .delete(blog)
+    const existing = await db
+      .select()
+      .from(blog)
       .where(eq(blog.id, id))
-      .returning();
+      .limit(1);
 
-    if (!deletedBlog[0]) {
+    if (!existing[0]) {
       return NextResponse.json(
         { success: false, error: "博客不存在" },
         { status: 404 }
       );
     }
+
+    const imageLinks = Array.isArray(existing[0].imageLinks) ? existing[0].imageLinks : [];
+    await deleteBlobUrls(imageLinks);
+
+    const deletedBlog = await db
+      .delete(blog)
+      .where(eq(blog.id, id))
+      .returning();
 
     return NextResponse.json({
       success: true,

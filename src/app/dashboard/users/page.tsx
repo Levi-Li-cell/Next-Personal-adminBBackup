@@ -48,6 +48,7 @@ export default function UserManagementPage() {
   const [limit, setLimit] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+  const [reloadKey, setReloadKey] = useState(0);
 
   // 获取用户列表
   useEffect(() => {
@@ -65,45 +66,17 @@ export default function UserManagementPage() {
           params.append("search", search);
         }
 
-        // 这里需要实现用户API路由
-        // 暂时使用模拟数据
-        // const response = await fetch(`/api/users?${params.toString()}`);
-        // const data: UserResponse = await response.json();
+        const response = await fetch(`/api/users?${params.toString()}`);
+        const data: UserResponse & { error?: string } = await response.json();
 
-        // 模拟数据
-        const mockData: UserResponse = {
-          success: true,
-          data: [
-            {
-              id: "1",
-              name: "管理员",
-              email: "admin@example.com",
-              emailVerified: true,
-              createdAt: "2026-03-01T00:00:00Z",
-              updatedAt: "2026-03-01T00:00:00Z",
-              role: "admin",
-            },
-            {
-              id: "2",
-              name: "测试用户",
-              email: "test@example.com",
-              emailVerified: true,
-              createdAt: "2026-03-02T00:00:00Z",
-              updatedAt: "2026-03-02T00:00:00Z",
-              role: "user",
-            },
-          ],
-          pagination: {
-            page: 1,
-            limit: 10,
-            total: 2,
-            totalPages: 1,
-          },
-        };
+        if (data.success) {
+          setUsers(data.data);
+          setTotalPages(data.pagination.totalPages);
+          setTotal(data.pagination.total);
+          return;
+        }
 
-        setUsers(mockData.data);
-        setTotalPages(mockData.pagination.totalPages);
-        setTotal(mockData.pagination.total);
+        setError(data.error || "获取用户列表失败");
       } catch (err) {
         setError("网络错误，请稍后重试");
         console.error("获取用户列表失败:", err);
@@ -113,7 +86,7 @@ export default function UserManagementPage() {
     }
 
     fetchUsers();
-  }, [page, limit, search]);
+  }, [page, limit, search, reloadKey]);
 
   // 分页处理
   const handlePageChange = (newPage: number) => {
@@ -214,7 +187,7 @@ export default function UserManagementPage() {
                       <Button 
                         variant="ghost" 
                         className="mt-4 text-purple-400 hover:text-purple-300"
-                        onClick={() => window.location.reload()}
+                        onClick={() => setReloadKey((value) => value + 1)}
                       >
                         重试
                       </Button>
@@ -252,6 +225,7 @@ export default function UserManagementPage() {
                             size="icon" 
                             className="text-white/60 hover:text-white hover:bg-white/10"
                             aria-label="编辑"
+                            onClick={() => router.push(`/dashboard/users/edit/${user.id}`)}
                           >
                             <User className="w-4 h-4" />
                           </Button>

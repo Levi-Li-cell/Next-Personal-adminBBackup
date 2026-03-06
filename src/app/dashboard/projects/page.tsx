@@ -57,6 +57,7 @@ export default function ProjectManagementPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   // 获取项目列表
   useEffect(() => {
@@ -94,7 +95,7 @@ export default function ProjectManagementPage() {
     }
 
     fetchProjects();
-  }, [page, limit, search, status]);
+  }, [page, limit, search, status, reloadKey]);
 
   // 删除项目
   const handleDelete = async () => {
@@ -220,7 +221,7 @@ export default function ProjectManagementPage() {
                       <Button 
                         variant="ghost" 
                         className="mt-4 text-purple-400 hover:text-purple-300"
-                        onClick={() => window.location.reload()}
+                        onClick={() => setReloadKey((value) => value + 1)}
                       >
                         重试
                       </Button>

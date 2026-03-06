@@ -145,7 +145,7 @@ function LoginContent() {
 
         <div className="mt-6 text-center">
           <a
-            href="http://localhost:3000"
+            href={process.env.NEXT_PUBLIC_FRONTEND_URL || "http://localhost:3000"}
             className="text-sm text-purple-400 hover:text-purple-300"
           >
             返回前台网站
