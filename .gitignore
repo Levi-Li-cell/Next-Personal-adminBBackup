@@ -42,3 +42,14 @@ next-env.d.ts
 # drizzle
 drizzle/meta/
 .env*.local
+
+# logs
+*.log
+.dev-*.log
+
+# test files
+test-*.js
+test-*.html
+
+# vercel env
+.env.admin-*

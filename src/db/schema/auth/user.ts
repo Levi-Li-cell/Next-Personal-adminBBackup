@@ -11,6 +11,9 @@ export const user = pgTable("user", {
   imageLinks: json("image_links").$type<string[]>().default([]),
   role: text("role").default("member").notNull(),
   gender: boolean("gender"),
+  registerIp: text("register_ip"),
+  registerUserAgent: text("register_user_agent"),
+  registerRiskLevel: text("register_risk_level"),
   createdAt: timestamp("createdAt").defaultNow(),
   updatedAt: timestamp("updatedAt")
     .defaultNow()

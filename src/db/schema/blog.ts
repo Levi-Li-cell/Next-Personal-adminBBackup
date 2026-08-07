@@ -11,6 +11,9 @@ export const blog = pgTable("blog", {
   coverImage: text("cover_image"),
   imageLinks: jsonb("image_links").$type<string[]>().default([]),
   category: text("category").notNull().default("未分类"),
+  targetAudience: text("target_audience").notNull().default("both"),
+  ctaType: text("cta_type").notNull().default("both"),
+  featured: boolean("featured").notNull().default(false),
   tags: jsonb("tags").$type<string[]>().default([]),
   authorId: text("author_id").references(() => user.id, { onDelete: "cascade" }),
   status: text("status").notNull().default("draft"), // draft, published
